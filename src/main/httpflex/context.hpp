@@ -1,7 +1,7 @@
-#include <map>
-
 #ifndef HTTPFLEX_CONTEXT_HPP
 #define HTTPFLEX_CONTEXT_HPP
+
+#include <map>
 
 namespace httpflex {
     class Response

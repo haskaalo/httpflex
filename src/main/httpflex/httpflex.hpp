@@ -1,11 +1,11 @@
+#ifndef HTTPFLEX_HTTPFLEX_HPP
+#define HTTPFLEX_HTTPFLEX_HPP
+
 #include <iostream>
 #include <functional>
 #include <unordered_map>
 #include <mutex>
 #include "httpflex/context.hpp"
-
-#ifndef HTTPFLEX_HTTPFLEX_HPP
-#define HTTPFLEX_HTTPFLEX_HPP
 
 namespace httpflex {
     class Server

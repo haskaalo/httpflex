@@ -12,6 +12,7 @@
 #include "httpflex/const.hpp"
 #include "httpflex/utils.hpp"
 #include "httpflex/context.hpp"
+#include "httpflex/socket.hpp"
 
 namespace httpflex {
     void Server::SetRequestHandler(std::function<Response (Request)> func)
@@ -86,27 +87,36 @@ namespace httpflex {
 
     void Server::HandleRequest(int clientfd)
     {
-        ssize_t msg;
-        char requestBuf[HTTPFLEX_MAX_BUFFER_SIZE];
+        ssize_t msgSize;
         std::string fullMessage, requestLine;
         std::vector<std::string> splitRequestLine;
         Request request;
 
-        msg = recv(clientfd, &requestBuf, sizeof(requestBuf), 0);
-        if (msg == -1) {
-            #ifdef HTTPFLEX_DEBUG
+        while (fullMessage.find("\r\n") == std::string::npos) {
+            std::string requestBuf;
+
+            msgSize = ReceiveFromSocket(clientfd, requestBuf);
+            if (msgSize == -1) {
+                #ifdef HTTPFLEX_DEBUG
                 std::cout << "httpflex: Failed to receive request line" << std::endl;
-            #endif
-            return;
+                #endif
+                return;
+            } else if (msgSize == 0) {
+                #ifdef HTTPFLEX_DEBUG
+                std::cout << "httpflex: " << HTTPFLEX_CLIENT_DISCONNECTED_ERROR << std::endl;
+                #endif
+                return;
+            }
+
+            fullMessage += requestBuf;
         }
-        fullMessage += requestBuf;
 
         std::istringstream messageStream(fullMessage);
         std::getline(messageStream, requestLine, '\r');
 
         if (requestLine == "") {
             #ifdef HTTPFLEX_DEBUG
-                std::cout << "httpflex: Empted request line";
+            std::cout << "httpflex: Empted request line";
             #endif
             return;
         }
@@ -114,7 +124,7 @@ namespace httpflex {
         splitRequestLine = Split(requestLine, ' ');
         if (splitRequestLine.size() != 3) {
             #ifdef HTTPFLEX_DEBUG
-                std::cout << "httpflex: Invalid Request line size." <<std::endl << "Length: " << splitRequestLine.size() << std::endl;
+            std::cout << "httpflex: Invalid Request line size." <<std::endl << "Length: " << splitRequestLine.size() << std::endl;
             #endif
             return;
         }
@@ -127,7 +137,7 @@ namespace httpflex {
             HandleMethodGet(clientfd, request, fullMessage);
         } else {
             #ifdef HTTPFLEX_DEBUG
-                std::cout << "httpflex: Invalid Request Method." << std::endl << "Received: " << request.method << std::endl;
+            std::cout << "httpflex: Invalid Request Method." << std::endl << "Received: " << request.method << std::endl;
             #endif
             return;
         }
@@ -138,54 +148,17 @@ namespace httpflex {
     void Server::SendMessage(int clientfd, Response& response)
     {
         std::string statusLineHeader = "HTTP/1.1 " + std::to_string(response.status) + " " + ReasonPhrase[response.status] + "\r\n";
-        char* bufToSend;
-        std::size_t bufSize;
-        ssize_t prevByteSent = 0;
-        int totalByteSent = 0;
 
         for (const auto& keyval : response.header) {
             statusLineHeader += keyval.first + ": " + keyval.second + "\r\n";
         }
         statusLineHeader += "\r\n";
 
-        // Send Status line + headers
-        while (totalByteSent < statusLineHeader.size()) {
-            bufToSend = new char[totalByteSent+HTTPFLEX_SEND_BUFFER_SIZE(statusLineHeader.size() - totalByteSent)+1];
-            bufSize = statusLineHeader.copy(bufToSend, HTTPFLEX_SEND_BUFFER_SIZE(statusLineHeader.size() - totalByteSent), totalByteSent);
-            bufToSend[bufSize] = '\0';
-
-            prevByteSent = send(clientfd, bufToSend, strlen(bufToSend), 0);
-
-            if (prevByteSent == -1) {
-                delete [] bufToSend;
-                throw std::runtime_error(strerror(errno));
-            } else if (prevByteSent == 0) {
-                delete [] bufToSend;
-                throw std::runtime_error("The client has closed the connection earlier");
-            }
-            totalByteSent += prevByteSent;
+        try {
+            SendToSocket(clientfd, statusLineHeader);
+            SendToSocket(clientfd, *response.body);
+        } catch(std::runtime_error& err) {
+            throw;
         }
-
-        totalByteSent = 0;
-        prevByteSent = 0;
-
-        // Send Body
-        while (totalByteSent < (*response.body).size()) {
-            bufToSend = new char[totalByteSent+HTTPFLEX_SEND_BUFFER_SIZE((*response.body).size() - totalByteSent)+1];
-            bufSize = (*response.body).copy(bufToSend, HTTPFLEX_SEND_BUFFER_SIZE((*response.body).size() - totalByteSent), totalByteSent);
-            bufToSend[bufSize] = '\0';
-
-            prevByteSent = send(clientfd, bufToSend, strlen(bufToSend), 0);
-            if (prevByteSent == -1) {
-                delete [] bufToSend;
-                throw std::runtime_error(strerror(errno));
-            } else if (prevByteSent == 0) {
-                delete [] bufToSend;
-                throw std::runtime_error("The client has closed the connection earlier!");
-            }
-            totalByteSent += prevByteSent;
-        }
-        delete [] bufToSend;
-
     }
 }

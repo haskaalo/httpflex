@@ -1,5 +1,6 @@
 #include "testm.hpp"
 #include "httpflex/httpflex.hpp"
+#include "httpflex/socket.hpp"
 
 httpflex::Response RequestHandler(httpflex::Request request)
 {
@@ -12,6 +13,7 @@ httpflex::Response RequestHandler(httpflex::Request request)
 int main()
 {
     httpflex::Server server;
+
     server.SetRequestHandler(RequestHandler);
     server.ListenOnPort(3000);
     return 0;
