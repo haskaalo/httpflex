@@ -6,7 +6,8 @@
 #include <sstream>
 
 namespace httpflex {
-    std::vector<std::string> Split(const std::string &s, char delimiter) {
+    std::vector<std::string> Split(const std::string &s, char delimiter)
+    {
         std::vector<std::string> tokens;
         std::string token;
         std::istringstream tokenStream(s);
@@ -18,10 +19,10 @@ namespace httpflex {
         return tokens;
     }
 
-    Header ParseHeader(const std::string &header) {
+    Header ParseHeader(std::string &header)
+    {
         Header headers;
-
-        int pos = header.find_first_of(':');
+        unsigned long pos = header.find(':');
         if (pos == -1) {
             throw std::runtime_error("Invalid header format");
         }
@@ -29,8 +30,44 @@ namespace httpflex {
             throw std::runtime_error("Invalid header format");
         }
 
-        headers.name = header.substr(pos + 1);
-        headers.value = header.substr(0, pos);
+        headers.name = header.substr(0, pos);
+        headers.value = header.substr(pos+1, header.size());
+
+        return headers;
+    }
+
+    std::map<std::string, std::string> ParseHeadersFromString(std::string &s)
+    {
+        std::istringstream ss(s);
+        std::string line;
+        bool firstLine = true;
+        Header header;
+        std::map<std::string, std::string> headers;
+
+        while (std::getline(ss, line, '\r')) {
+            if (firstLine) { // Ignore first line which should be an empty line
+                firstLine = false;
+                continue;
+            }
+
+            if (line.empty()) {
+                continue;
+            }
+
+            if (line.size() == 1) {
+                continue;
+            }
+
+            try {
+                line.erase(0, 1); // TODO: First char is linebreak. Why?
+                header = ParseHeader(line);
+            } catch (std::runtime_error& err) {
+                throw;
+            }
+
+            // TODO: Trim header
+            headers.insert({header.name, header.value});
+        }
 
         return headers;
     }

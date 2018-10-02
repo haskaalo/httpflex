@@ -3,7 +3,7 @@
 
 #include <iostream>
 #include <vector>
-#include <set>
+#include <map>
 
 namespace httpflex {
     std::vector<std::string> Split(const std::string &s, char delimiter);
@@ -14,6 +14,8 @@ namespace httpflex {
         std::string value;
     };
 
-    Header ParseHeader(const std::string &header);
+    Header ParseHeader(std::string &header);
+
+    std::map<std::string, std::string> ParseHeadersFromString(std::string &s);
 }
 #endif

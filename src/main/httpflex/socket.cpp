@@ -11,9 +11,8 @@ namespace httpflex {
     {
         char msgReceived[HTTPFLEX_MAX_BUFFER_SIZE];
         ssize_t msgSize;
-
-        memset(&msgReceived, 0, sizeof(msgReceived));
-        msgSize = recv(fd, &msgReceived, sizeof(msgReceived), 0);
+        memset(&msgReceived, 0, sizeof msgReceived);
+        msgSize = recv(fd, msgReceived, HTTPFLEX_MAX_BUFFER_SIZE, 0);
         msg = std::string(msgReceived);
 
         return msgSize;

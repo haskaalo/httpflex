@@ -71,16 +71,38 @@ namespace httpflex {
         struct sockaddr_storage their_addr;
         socklen_t sin_size;
         int clientfd;
+        struct timeval timeoutSend;
+        struct timeval timeoutReceive;
+
+        timeoutSend.tv_sec = HTTPFLEX_TIMEOUT_SEND;
+        timeoutSend.tv_usec = 0;
+
+        timeoutReceive.tv_sec = HTTPFLEX_TIMEOUT_RECEIVE;
+        timeoutReceive.tv_usec = 0;
 
         for (;;) {
             sin_size = sizeof their_addr;
             clientfd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
             if (clientfd == -1) {
                 #ifdef HTTPFLEX_DEBUG
-                    std::cout << "httpflex: Failed to accept a connection" << std::endl;
+                std::cout << "httpflex: Failed to accept a connection" << std::endl;
                 #endif
                 continue;
             }
+
+            if (setsockopt (clientfd, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeoutSend, sizeof(timeoutSend)) < 0) {
+                #ifdef HTTPFLEX_DEBUG
+                std::cout << "httpflex: Failed to set socket options: " << strerror(errno) << std::endl;
+                #endif
+                continue;
+            }
+            if (setsockopt (clientfd, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeoutReceive, sizeof(timeoutReceive)) < 0) {
+                #ifdef HTTPFLEX_DEBUG
+                std::cout << "httpflex: Failed to set socket options: " << strerror(errno) << std::endl;
+                #endif
+                continue;
+            }
+
             std::thread (&Server::HandleRequest, this, clientfd).detach();
         }
     }
@@ -88,36 +110,38 @@ namespace httpflex {
     void Server::HandleRequest(int clientfd)
     {
         ssize_t msgSize;
-        std::string fullMessage, requestLine;
+        std::string fullMessage, requestLine, requestBuf;
         std::vector<std::string> splitRequestLine;
         Request request;
 
         while (fullMessage.find("\r\n") == std::string::npos) {
-            std::string requestBuf;
-
             msgSize = ReceiveFromSocket(clientfd, requestBuf);
             if (msgSize == -1) {
                 #ifdef HTTPFLEX_DEBUG
                 std::cout << "httpflex: Failed to receive request line" << std::endl;
                 #endif
+
+                close(clientfd);
                 return;
             } else if (msgSize == 0) {
                 #ifdef HTTPFLEX_DEBUG
                 std::cout << "httpflex: " << HTTPFLEX_CLIENT_DISCONNECTED_ERROR << std::endl;
                 #endif
+
+                close(clientfd);
                 return;
             }
 
             fullMessage += requestBuf;
         }
 
-        std::istringstream messageStream(fullMessage);
-        std::getline(messageStream, requestLine, '\r');
-
-        if (requestLine == "") {
+        requestLine = fullMessage.substr(0, fullMessage.find("\r\n"));
+        if (requestLine.empty()) {
             #ifdef HTTPFLEX_DEBUG
-            std::cout << "httpflex: Empted request line";
+            std::cout << "httpflex: Empted request line" << std::endl;
             #endif
+
+            close(clientfd);
             return;
         }
 
@@ -126,6 +150,8 @@ namespace httpflex {
             #ifdef HTTPFLEX_DEBUG
             std::cout << "httpflex: Invalid Request line size." <<std::endl << "Length: " << splitRequestLine.size() << std::endl;
             #endif
+
+            close(clientfd);
             return;
         }
 
@@ -133,12 +159,43 @@ namespace httpflex {
         request.url = splitRequestLine[1];
         request.version = splitRequestLine[2];
 
+        while (fullMessage.find("\r\n\r\n") == std::string::npos) {
+            msgSize = ReceiveFromSocket(clientfd, requestBuf);
+            if (msgSize == -1) {
+                #ifdef HTTPFLEX_DEBUG
+                std::cout << "httpflex: Failed to receive request line" << std::endl;
+                #endif
+
+                close(clientfd);
+                return;
+            } else if (msgSize == 0) {
+                #ifdef HTTPFLEX_DEBUG
+                std::cout << "httpflex: " << HTTPFLEX_CLIENT_DISCONNECTED_ERROR << std::endl;
+                #endif
+                close(clientfd);
+                return;
+            }
+
+            fullMessage += requestBuf;
+        }
+
+        try {
+            request.header = ParseHeadersFromString(fullMessage);
+        } catch(std::runtime_error& err) {
+            #ifdef HTTPFLEX_DEBUG
+            std::cout << "httpflex: " << err.what() << std::endl;
+            #endif
+            close(clientfd);
+            return;
+        }
+
         if (request.method == "GET") {
             HandleMethodGet(clientfd, request, fullMessage);
         } else {
             #ifdef HTTPFLEX_DEBUG
             std::cout << "httpflex: Invalid Request Method." << std::endl << "Received: " << request.method << std::endl;
             #endif
+            close(clientfd);
             return;
         }
 
