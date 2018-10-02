@@ -33,6 +33,9 @@ namespace httpflex {
         headers.name = header.substr(0, pos);
         headers.value = header.substr(pos+1, header.size());
 
+        trim(headers.name);
+        trim(headers.value);
+
         return headers;
     }
 
@@ -64,8 +67,7 @@ namespace httpflex {
             } catch (std::runtime_error& err) {
                 throw;
             }
-
-            // TODO: Trim header
+            
             headers.insert({header.name, header.value});
         }
 

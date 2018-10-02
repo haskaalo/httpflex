@@ -114,7 +114,7 @@ namespace httpflex {
             std::string fullMessage, requestLine, requestBuf;
             std::vector<std::string> splitRequestLine;
             Request request;
-            
+
             while (fullMessage.find("\r\n") == std::string::npos) {
                 msgSize = ReceiveFromSocket(clientfd, requestBuf);
                 if (msgSize == -1) {
