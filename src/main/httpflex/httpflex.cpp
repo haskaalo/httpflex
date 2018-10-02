@@ -109,96 +109,89 @@ namespace httpflex {
 
     void Server::HandleRequest(int clientfd)
     {
-        ssize_t msgSize;
-        std::string fullMessage, requestLine, requestBuf;
-        std::vector<std::string> splitRequestLine;
-        Request request;
+        for (;;) {
+            ssize_t msgSize;
+            std::string fullMessage, requestLine, requestBuf;
+            std::vector<std::string> splitRequestLine;
+            Request request;
+            
+            while (fullMessage.find("\r\n") == std::string::npos) {
+                msgSize = ReceiveFromSocket(clientfd, requestBuf);
+                if (msgSize == -1) {
+                    #ifdef HTTPFLEX_DEBUG
+                    std::cout << "httpflex: Failed to receive request line" << std::endl;
+                    #endif
+                    break;
+                } else if (msgSize == 0) {
+                    #ifdef HTTPFLEX_DEBUG
+                    std::cout << "httpflex: " << HTTPFLEX_CLIENT_DISCONNECTED_ERROR << std::endl;
+                    #endif
+                    break;
+                }
 
-        while (fullMessage.find("\r\n") == std::string::npos) {
-            msgSize = ReceiveFromSocket(clientfd, requestBuf);
-            if (msgSize == -1) {
-                #ifdef HTTPFLEX_DEBUG
-                std::cout << "httpflex: Failed to receive request line" << std::endl;
-                #endif
-
-                close(clientfd);
-                return;
-            } else if (msgSize == 0) {
-                #ifdef HTTPFLEX_DEBUG
-                std::cout << "httpflex: " << HTTPFLEX_CLIENT_DISCONNECTED_ERROR << std::endl;
-                #endif
-
-                close(clientfd);
-                return;
+                fullMessage += requestBuf;
             }
 
-            fullMessage += requestBuf;
-        }
-
-        requestLine = fullMessage.substr(0, fullMessage.find("\r\n"));
-        if (requestLine.empty()) {
-            #ifdef HTTPFLEX_DEBUG
-            std::cout << "httpflex: Empted request line" << std::endl;
-            #endif
-
-            close(clientfd);
-            return;
-        }
-
-        splitRequestLine = Split(requestLine, ' ');
-        if (splitRequestLine.size() != 3) {
-            #ifdef HTTPFLEX_DEBUG
-            std::cout << "httpflex: Invalid Request line size." <<std::endl << "Length: " << splitRequestLine.size() << std::endl;
-            #endif
-
-            close(clientfd);
-            return;
-        }
-
-        request.method = splitRequestLine[0];
-        request.url = splitRequestLine[1];
-        request.version = splitRequestLine[2];
-
-        while (fullMessage.find("\r\n\r\n") == std::string::npos) {
-            msgSize = ReceiveFromSocket(clientfd, requestBuf);
-            if (msgSize == -1) {
+            requestLine = fullMessage.substr(0, fullMessage.find("\r\n"));
+            if (requestLine.empty()) {
                 #ifdef HTTPFLEX_DEBUG
-                std::cout << "httpflex: Failed to receive request line" << std::endl;
+                std::cout << "httpflex: Empted request line" << std::endl;
                 #endif
-
-                close(clientfd);
-                return;
-            } else if (msgSize == 0) {
-                #ifdef HTTPFLEX_DEBUG
-                std::cout << "httpflex: " << HTTPFLEX_CLIENT_DISCONNECTED_ERROR << std::endl;
-                #endif
-                close(clientfd);
-                return;
+                break;
             }
 
-            fullMessage += requestBuf;
-        }
+            splitRequestLine = Split(requestLine, ' ');
+            if (splitRequestLine.size() != 3) {
+                #ifdef HTTPFLEX_DEBUG
+                std::cout << "httpflex: Invalid Request line size." << std::endl << "Length: " << splitRequestLine.size() << std::endl;
+                #endif
+                break;
+            }
 
-        try {
-            request.header = ParseHeadersFromString(fullMessage);
-        } catch(std::runtime_error& err) {
-            #ifdef HTTPFLEX_DEBUG
-            std::cout << "httpflex: " << err.what() << std::endl;
-            #endif
-            close(clientfd);
-            return;
-        }
+            request.method = splitRequestLine[0];
+            request.url = splitRequestLine[1];
+            request.version = splitRequestLine[2];
 
-        if (request.method == "GET") {
-            HandleMethodGet(clientfd, request, fullMessage);
-        } else {
-            #ifdef HTTPFLEX_DEBUG
-            std::cout << "httpflex: Invalid Request Method." << std::endl << "Received: " << request.method << std::endl;
-            #endif
-            close(clientfd);
-            return;
-        }
+            while (fullMessage.find("\r\n\r\n") == std::string::npos) {
+                msgSize = ReceiveFromSocket(clientfd, requestBuf);
+                if (msgSize == -1) {
+                    #ifdef HTTPFLEX_DEBUG
+                    std::cout << "httpflex: Failed to receive request line" << std::endl;
+                    #endif
+                    break;
+                } else if (msgSize == 0) {
+                    #ifdef HTTPFLEX_DEBUG
+                    std::cout << "httpflex: " << HTTPFLEX_CLIENT_DISCONNECTED_ERROR << std::endl;
+                    #endif
+                    break;
+                }
 
+                fullMessage += requestBuf;
+            }
+
+            try {
+                request.header = ParseHeadersFromString(fullMessage);
+            } catch (std::runtime_error &err) {
+                #ifdef HTTPFLEX_DEBUG
+                std::cout << "httpflex: " << err.what() << std::endl;
+                #endif
+                break;
+            }
+
+            if (request.method == "GET") {
+                HandleMethodGet(clientfd, request, fullMessage);
+            } else {
+                #ifdef HTTPFLEX_DEBUG
+                std::cout << "httpflex: Invalid Request Method." << std::endl << "Received: " << request.method
+                          << std::endl;
+                #endif
+                break;
+            }
+
+            if ((request.header["Connection"] != "Keep-Alive") && (request.header["Connection"] != "keep-alive")) {
+                break;
+            }
+        }
         close(clientfd);
     }
 
