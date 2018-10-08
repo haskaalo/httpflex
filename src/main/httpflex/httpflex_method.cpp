@@ -25,15 +25,9 @@ namespace httpflex {
             return;
         } catch(...) {
             #ifdef HTTPFLEX_DEBUG
-            std::cout << "httpflex: Request handler threw an error" << std::endl;
+            std::cout << "httpflex: Request handler threw an undefined error" << std::endl;
             #endif
             return;
-        }
-
-        // Set Keep-Alive and connection header
-        if ((request.header["Connection"] == "Keep-Alive") || (request.header["Connection"] == "keep-alive")) {
-            response.header.insert({"Connection", "Keep-Alive"});
-            response.header.insert({"Keep-Alive", "timeout=" + std::to_string(HTTPFLEX_TIMEOUT_RECEIVE) + ", max=" + std::to_string(HTTPFLEX_KEEPALIVE_MAX)});
         }
 
         try {

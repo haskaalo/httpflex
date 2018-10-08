@@ -121,12 +121,14 @@ namespace httpflex {
                     #ifdef HTTPFLEX_DEBUG
                     std::cout << "httpflex: Failed to receive request line" << std::endl;
                     #endif
-                    break;
+                    close(clientfd);
+                    return;
                 } else if (msgSize == 0) {
                     #ifdef HTTPFLEX_DEBUG
                     std::cout << "httpflex: " << HTTPFLEX_CLIENT_DISCONNECTED_ERROR << std::endl;
                     #endif
-                    break;
+                    close(clientfd);
+                    return;
                 }
 
                 fullMessage += requestBuf;
@@ -157,13 +159,16 @@ namespace httpflex {
                 if (msgSize == -1) {
                     #ifdef HTTPFLEX_DEBUG
                     std::cout << "httpflex: Failed to receive request line" << std::endl;
+                    perror("httpflex");
                     #endif
-                    break;
+                    close(clientfd);
+                    return;
                 } else if (msgSize == 0) {
                     #ifdef HTTPFLEX_DEBUG
                     std::cout << "httpflex: " << HTTPFLEX_CLIENT_DISCONNECTED_ERROR << std::endl;
                     #endif
-                    break;
+                    close(clientfd);
+                    return;
                 }
 
                 fullMessage += requestBuf;
@@ -182,8 +187,8 @@ namespace httpflex {
                 HandleMethodGet(clientfd, request, fullMessage);
             } else {
                 #ifdef HTTPFLEX_DEBUG
-                std::cout << "httpflex: Invalid Request Method." << std::endl << "Received: " << request.method
-                          << std::endl;
+                std::cout << "httpflex: Invalid Request Method." << std::endl;
+                std::cout << "Received: " << request.method << std::endl;
                 #endif
                 break;
             }
@@ -198,6 +203,7 @@ namespace httpflex {
     void Server::SendMessage(int clientfd, Response& response)
     {
         std::string statusLineHeader = "HTTP/1.1 " + std::to_string(response.status) + " " + ReasonPhrase[response.status] + "\r\n";
+        response.header.insert({"Content-Length", std::to_string(response.body->size())});
 
         for (const auto& keyval : response.header) {
             statusLineHeader += keyval.first + ": " + keyval.second + "\r\n";

@@ -6,6 +6,15 @@
 #include <sstream>
 
 namespace httpflex {
+    void trim(std::string &s) {
+        while(s.compare(0,1," ")==0) {
+            s.erase(s.begin()); // remove leading whitespaces
+        }
+        while(s.size()>0 && s.compare(s.size()-1,1," ")==0) {
+            s.erase(s.end()-1); // remove trailing whitespaces
+        }
+    }
+
     std::vector<std::string> Split(const std::string &s, char delimiter)
     {
         std::vector<std::string> tokens;
@@ -22,7 +31,7 @@ namespace httpflex {
     Header ParseHeader(std::string &header)
     {
         Header headers;
-        unsigned long pos = header.find(':');
+        auto pos = header.find_first_of(':');
         if (pos == -1) {
             throw std::runtime_error("Invalid header format");
         }
