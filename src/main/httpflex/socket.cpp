@@ -26,7 +26,7 @@ namespace httpflex {
         int totalByteSent = 0;
 
         while (totalByteSent < msg.size()) {
-            bufToSend = new char[totalByteSent+HTTPFLEX_SEND_BUFFER_SIZE((msg.size() - totalByteSent) + 1)];
+            bufToSend = new char[HTTPFLEX_SEND_BUFFER_SIZE((msg.size() - totalByteSent) + 1)];
             bufSize = msg.copy(bufToSend, HTTPFLEX_SEND_BUFFER_SIZE(msg.size() - totalByteSent), totalByteSent);
             bufToSend[bufSize] = '\0';
 
